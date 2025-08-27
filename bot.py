@@ -1,68 +1,91 @@
-# My_OFM_bot - V1 (minimal Telegram bot)
-# Synchronous, beginner-friendly using python-telegram-bot v13.x
-# IMPORTANT: Put your token in config.py before running.
+# bot.py — My_OFM_bot V1 (compatible python-telegram-bot v22+)
 import logging
-import os
+import sys
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, CallbackContext
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Basic logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+# Charge ton token depuis config.py (crée config.py avec API_TOKEN = '...').
+try:
+    from config import API_TOKEN
+except Exception:
+    sys.exit("⚠️ Erreur: crée config.py et définis API_TOKEN = 'ton_token_ici'")
+
+# Logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
-# Load token from config.py (should define API_TOKEN variable)
-try:
-    from config import API_TOKEN  # create config.py and add your token there
-except Exception as e:
-    raise SystemExit("Please create config.py with API_TOKEN = 'your_token_here'") from e
-
-# Handlers
-def start(update: Update, context: CallbackContext):
+# Handlers (async pour PTB v20+)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("Créer un modèle", callback_data='create_model'), InlineKeyboardButton("Mon modèle", callback_data='my_model')],
-        [InlineKeyboardButton("Faceswap vidéo", callback_data='faceswap'), InlineKeyboardButton("Aide", callback_data='help')]
+        [InlineKeyboardButton("Créer un modèle", callback_data="create_model"),
+         InlineKeyboardButton("Mon modèle", callback_data="my_model")],
+        [InlineKeyboardButton("Faceswap vidéo", callback_data="faceswap"),
+         InlineKeyboardButton("Aide", callback_data="help")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("Bienvenue sur <b>My_OFM_bot</b> 🤖\nChoisissez une option ci-dessous :", reply_markup=reply_markup, parse_mode='HTML')
+    if update.message:
+        await update.message.reply_text(
+            "Bienvenue sur <b>My_OFM_bot</b> 🤖\nChoisissez une option ci-dessous :",
+            reply_markup=reply_markup,
+            parse_mode="HTML"
+        )
+    else:
+        await context.bot.send_message(chat_id=update.effective_chat.id,
+                                       text="Bienvenue sur My_OFM_bot — menu ci-dessous.",
+                                       reply_markup=reply_markup)
 
-def help_cmd(update: Update, context: CallbackContext):
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "My_OFM_bot V1 - commandes disponibles:\n"
-        "/start - afficher le menu principal\n"
-        "/help - afficher cette aide\n\n"
-        "V1 est un MVP : les options 'Créer un modèle', 'Mon modèle' et 'Faceswap' sont pour l'instant des placeholders."
+        "My_OFM_bot V1 — commandes :\n"
+        "/start - menu principal\n"
+        "/help - voir cette aide\n\n"
+        "Note: V1 est un MVP — les options 'Créer un modèle', 'Mon modèle' et 'Faceswap' sont des placeholders."
     )
-    update.message.reply_text(help_text)
+    await update.message.reply_text(help_text)
 
-def button_handler(update: Update, context: CallbackContext):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    query.answer()
-    data = query.data
-    if data == 'create_model':
-        query.edit_message_text("Créer mon modèle 🚧\nFonctionnalité en développement. Bientôt tu pourras nommer et définir ton modèle virtuel.")
-    elif data == 'my_model':
-        query.edit_message_text("Mon modèle 👩‍💻\nAucun modèle enregistré pour le moment. Utilise 'Créer un modèle' dès qu'elle sera disponible.")
-    elif data == 'faceswap':
-        query.edit_message_text("Faceswap vidéo 🎭\nCette fonctionnalité arrivera dans une prochaine version (V4).")
-    elif data == 'help':
-        query.edit_message_text("Aide 📘\nUtilise /help pour voir les commandes. Pour l'instant V1 est un squelette prêt pour évoluer.")
+    await query.answer()
+    data = query.data or ""
+    if data == "create_model":
+        await query.edit_message_text(
+            "Créer mon modèle 🚧\nFonctionnalité en développement. Bientôt tu pourras nommer et définir ton modèle virtuel."
+        )
+    elif data == "my_model":
+        await query.edit_message_text(
+            "Mon modèle 👩‍💻\nAucun modèle enregistré pour le moment. Utilise 'Créer un modèle' quand disponible."
+        )
+    elif data == "faceswap":
+        await query.edit_message_text(
+            "Faceswap vidéo 🎭\nCette fonctionnalité arrivera dans une prochaine version (V4)."
+        )
+    elif data == "help":
+        await query.edit_message_text(
+            "Aide 📘\nUtilise /help pour voir les commandes. V1 est un squelette prêt pour évoluer."
+        )
+    else:
+        await query.edit_message_text("Commande inconnue.")
 
-def error_handler(update: object, context: CallbackContext):
-    logger.error(msg="Exception while handling an update:", exc_info=context.error)
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error("Exception while handling an update:", exc_info=context.error)
 
 def main():
-    updater = Updater(API_TOKEN, use_context=True)
-    dp = updater.dispatcher
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help_cmd))
-    dp.add_handler(CallbackQueryHandler(button_handler))
-    dp.add_error_handler(error_handler)
+    app = Application.builder().token(API_TOKEN).build()
 
-    # Start the Bot
-    print("Starting My_OFM_bot V1...")
-    updater.start_polling()
-    updater.idle()
+    # Command handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_cmd))
+    # CallbackQuery (inline buttons)
+    app.add_handler(CallbackQueryHandler(button_handler))
+    # error handler
+    app.add_error_handler(error_handler)
 
-if __name__ == '__main__':
+    print("▶️ Démarrage My_OFM_bot V1 (PTB v22+) — running...")
+    app.run_polling()
+
+if __name__ == "__main__":
     main()
+
